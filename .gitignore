@@ -1,0 +1,47 @@
+.env
+.env.local
+.env.*.local
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+node_modules/
+.next*/
+coverage/
+htmlcov/
+playwright-report/
+test-results/
+dist/
+build/
+*.egg-info/
+*.tsbuildinfo
+.DS_Store
+.supabase/
+supabase/.branches/
+supabase/.temp/
+
+# Local agent/editor state
+/.agents/
+/.codex/
+/.clerk/
+
+# Tests are intentionally kept local and are not published to GitHub.
+apps/api/tests/
+apps/web/e2e/
+**/*.test.*
+**/*.spec.*
+apps/web/playwright.config.ts
+apps/web/vitest.config.ts
+
+# Local documentation and design references. Keep only the two explicitly
+# approved root documents: PROJECT_MEMORY.md and ecommerce-spec.md.
+README*
+ui-design-spec.md
+*_mockup.html
+restaurant_storefront_ui_v3.html
+
+# Superseded or intermediate hero assets.
+/hero.png
+apps/web/public/hero-brand-source.png
+apps/web/public/hero-brand.png

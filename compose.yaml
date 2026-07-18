@@ -1,0 +1,37 @@
+name: allensnothern
+services:
+  api:
+    build:
+      context: ./apps/api
+      target: development
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    env_file:
+      - path: .env.example
+      - path: .env
+        required: false
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api:/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    build:
+      context: ./apps/api
+      target: development
+    command: python -m app.worker
+    env_file:
+      - path: .env.example
+      - path: .env
+        required: false
+    volumes:
+      - ./apps/api:/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

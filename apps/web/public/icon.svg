@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#173f35"/>
+  <circle cx="256" cy="236" r="134" fill="#f6f0e5"/>
+  <path d="M160 286c38-96 154-96 192 0-53 49-139 49-192 0Z" fill="#e56d3c"/>
+  <path d="M207 186c22-31 76-31 98 0" fill="none" stroke="#173f35" stroke-width="28" stroke-linecap="round"/>
+  <text x="256" y="430" text-anchor="middle" font-family="Arial" font-size="54" font-weight="800" fill="#f6f0e5">AN</text>
+</svg>
