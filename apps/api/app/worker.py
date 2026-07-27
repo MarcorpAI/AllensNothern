@@ -14,6 +14,8 @@ image_storage = MenuImageStorage(settings)
 
 
 async def process_once() -> int:
+    if not settings.resend_api_key:
+        return 0
     async with SessionLocal() as db:
         rows = (await db.execute(text("""select id,kind,recipient,payload from notification_outbox
             where sent_at is null and attempts < 5 and available_at <= now()
@@ -22,9 +24,8 @@ async def process_once() -> int:
             try:
                 payload = row["payload"]
                 subject = f"AllensNothern order {payload.get('order_number', '')}"
-                if settings.resend_api_key:
-                    resend.Emails.send({"from": settings.email_from, "to": [row["recipient"]],
-                        "subject": subject, "html": f"<h1>{subject}</h1><p>Status: {payload.get('status', 'received')}</p>"})
+                resend.Emails.send({"from": settings.email_from, "to": [row["recipient"]],
+                    "subject": subject, "html": f"<h1>{subject}</h1><p>Status: {payload.get('status', 'received')}</p>"})
                 await db.execute(text("update notification_outbox set sent_at=now(),attempts=attempts+1 where id=:id"),
                                  {"id": row["id"]})
             except Exception as exc:
