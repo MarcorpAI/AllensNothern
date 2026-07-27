@@ -1,4 +1,6 @@
 import asyncio
+import logging
+from time import monotonic
 
 import resend
 from sqlalchemy import text
@@ -11,6 +13,7 @@ from app.services.menu_management import MenuImageStorage, process_storage_clean
 settings = get_settings()
 resend.api_key = settings.resend_api_key
 image_storage = MenuImageStorage(settings)
+logger = logging.getLogger("allensnothern.worker")
 
 
 async def process_once() -> int:
@@ -49,10 +52,21 @@ async def expire_bank_transfers_once() -> int:
 
 
 async def main() -> None:
+    logging.basicConfig(level=logging.INFO)
+    logger.info("AllensNothern background worker started")
+    last_heartbeat = monotonic()
     while True:
         notification_count, cleanup_count, expired_count = await asyncio.gather(
             process_once(), process_storage_cleanup_once(), expire_bank_transfers_once())
         count = notification_count + cleanup_count + expired_count
+        if count:
+            logger.info(
+                "Worker processed notifications=%d cleanup=%d expired_transfers=%d",
+                notification_count, cleanup_count, expired_count,
+            )
+        if monotonic() - last_heartbeat >= 60:
+            logger.info("Worker heartbeat: active")
+            last_heartbeat = monotonic()
         await asyncio.sleep(2 if count else 10)
 
 
