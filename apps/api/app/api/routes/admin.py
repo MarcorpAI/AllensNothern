@@ -1,5 +1,6 @@
 import json
-from datetime import date, time
+from datetime import date, datetime, time
+from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
@@ -109,6 +110,39 @@ class CapacityRuleWrite(BaseModel):
         return self
 
 
+class PaymentRouteWrite(BaseModel):
+    code: str = Field(pattern=r"^[a-z0-9-]+$", min_length=2, max_length=50)
+    name_en: str = Field(min_length=2, max_length=100)
+    name_tr: str = Field(min_length=2, max_length=100)
+    route_type: Literal["local_transfer", "assisted"]
+    currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    account_holder: str = Field(default="", max_length=120)
+    bank_name: str = Field(default="", max_length=120)
+    account_label: str = Field(default="Account number", max_length=50)
+    account_identifier: str = Field(default="", max_length=120)
+    contact_url: str = Field(default="", max_length=500)
+    customer_rate: Decimal | None = Field(default=None, gt=0)
+    rounding_increment_minor: int = Field(default=1, ge=1, le=100000)
+    quote_minutes: int = Field(default=20, ge=5, le=120)
+    rate_valid_until: datetime | None = None
+    is_enabled: bool = False
+    sort_order: int = 0
+
+    @model_validator(mode="after")
+    def validate_route(self) -> "PaymentRouteWrite":
+        if self.route_type == "assisted":
+            if not self.contact_url:
+                raise ValueError("Assisted payment routes need a contact URL")
+            self.currency = None
+            self.customer_rate = None
+        else:
+            if not self.currency or not self.account_holder or not self.account_identifier:
+                raise ValueError("Local transfers need a currency, account holder, and account identifier")
+            if self.currency != "TRY" and (self.customer_rate is None or self.rate_valid_until is None):
+                raise ValueError("Foreign-currency routes need a customer rate and validity time")
+        return self
+
+
 def order_out(data: RowMapping) -> OrderOut:
     return OrderOut(id=data["id"], order_number=data["order_number"], status=data["status"],
         payment_status=data["payment_status"], customer_name=data["customer_name"],
@@ -134,6 +168,45 @@ def _modifier_payload(raw: str) -> list[ModifierWrite]:
         raise HTTPException(422, "Invalid modifier data") from exc
 
 
+@router.get("/payment-routes")
+async def admin_payment_routes(db: AsyncSession = Depends(get_db)) -> list[dict[str, object]]:
+    rows = (await db.execute(text("""select id,code,name_en,name_tr,route_type,currency,account_holder,
+        bank_name,account_label,account_identifier,contact_url,customer_rate,rounding_increment_minor,
+        quote_minutes,rate_valid_until,is_enabled,sort_order,updated_at
+        from payment_routes order by sort_order,name_en"""))).mappings().all()
+    return [dict(row) for row in rows]
+
+
+@router.post("/payment-routes", status_code=201)
+async def create_payment_route(payload: PaymentRouteWrite,
+                               db: AsyncSession = Depends(get_db)) -> dict[str, object]:
+    row = (await db.execute(text("""insert into payment_routes(code,name_en,name_tr,route_type,currency,
+        account_holder,bank_name,account_label,account_identifier,contact_url,customer_rate,
+        rounding_increment_minor,quote_minutes,rate_valid_until,is_enabled,sort_order)
+        values (:code,:name_en,:name_tr,:route_type,:currency,:account_holder,:bank_name,:account_label,
+        :account_identifier,:contact_url,:customer_rate,:rounding_increment_minor,:quote_minutes,
+        :rate_valid_until,:is_enabled,:sort_order) returning *"""), payload.model_dump())).mappings().one()
+    await db.commit()
+    return dict(row)
+
+
+@router.put("/payment-routes/{route_id}")
+async def update_payment_route(route_id: UUID, payload: PaymentRouteWrite,
+                               db: AsyncSession = Depends(get_db)) -> dict[str, object]:
+    row = (await db.execute(text("""update payment_routes set code=:code,name_en=:name_en,name_tr=:name_tr,
+        route_type=:route_type,currency=:currency,account_holder=:account_holder,bank_name=:bank_name,
+        account_label=:account_label,account_identifier=:account_identifier,contact_url=:contact_url,
+        customer_rate=:customer_rate,rounding_increment_minor=:rounding_increment_minor,
+        quote_minutes=:quote_minutes,rate_valid_until=:rate_valid_until,is_enabled=:is_enabled,
+        sort_order=:sort_order where id=:id returning *"""), payload.model_dump() | {
+        "id": route_id,
+    })).mappings().first()
+    if not row:
+        raise HTTPException(404, "Payment route not found")
+    await db.commit()
+    return dict(row)
+
+
 @router.get("/orders", response_model=list[OrderOut])
 async def orders(db: AsyncSession = Depends(get_db)) -> list[OrderOut]:
     rows = (await db.execute(text("""select id,order_number,status,payment_status,customer_name,
@@ -146,9 +219,21 @@ async def orders(db: AsyncSession = Depends(get_db)) -> list[OrderOut]:
 async def payment_orders(db: AsyncSession = Depends(get_db)) -> list[dict[str, object]]:
     if await expire_bank_transfer_orders(db):
         await db.commit()
-    rows = (await db.execute(text("""select id,order_number,customer_name,customer_email,
-        customer_phone,total_kurus,created_at,payment_expires_at,transfer_notified_at
-        from orders where payment_method='bank_transfer' and payment_status='pending'
+    rows = (await db.execute(text("""select o.id,o.order_number,o.customer_name,o.customer_email,
+        o.customer_phone,o.address_text delivery_address,
+        o.address_instructions delivery_instructions,o.total_kurus,o.created_at,
+        o.payment_expires_at,o.transfer_notified_at,
+        coalesce(o.settlement_currency,'TRY') settlement_currency,
+        coalesce(o.settlement_amount_minor,o.total_kurus) settlement_amount_minor,
+        coalesce(o.transfer_sender_name,'') transfer_sender_name,
+        o.transfer_customer_reference,o.transfer_mismatch_note,
+        coalesce(r.name_en,'Bank transfer') payment_route_name,
+        coalesce((select jsonb_agg(jsonb_build_object(
+          'item_name',oi.item_name_en,'quantity',oi.quantity,
+          'selected_modifiers',oi.selected_modifiers) order by oi.id)
+          from order_items oi where oi.order_id=o.id),'[]'::jsonb) items
+        from orders o left join payment_routes r on r.id=o.payment_route_id
+        where o.payment_method='bank_transfer' and o.payment_status='pending'
         and payment_expires_at > now()
         order by (transfer_notified_at is null),created_at"""))).mappings().all()
     return [dict(row) for row in rows]
@@ -160,6 +245,7 @@ async def confirm_bank_transfer(order_id: UUID, payload: BankTransferConfirmatio
     await expire_bank_transfer_orders(db)
     current = (await db.execute(text("""select id,order_number,status::text status,
         payment_status::text payment_status,payment_method,customer_name,total_kurus,address_text,
+        settlement_amount_minor,
         created_at,paid_at,payment_expires_at from orders where id=:id for update"""),
         {"id": order_id})).mappings().first()
     if not current or current["payment_method"] != "bank_transfer":
@@ -168,6 +254,13 @@ async def confirm_bank_transfer(order_id: UUID, payload: BankTransferConfirmatio
         return order_out(current)
     if current["payment_status"] != "pending":
         raise HTTPException(409, "This payment window has expired; do not prepare the order")
+    expected = current.get("settlement_amount_minor") or current["total_kurus"]
+    if payload.received_amount_minor < expected:
+        await db.execute(text("""update orders set transfer_mismatch_note=:note,updated_at=now()
+            where id=:id"""), {"id": order_id, "note": payload.mismatch_note.strip()
+            or f"Received {payload.received_amount_minor}; expected {expected}"})
+        await db.commit()
+        raise HTTPException(409, "Received amount is below the quoted amount; the order remains unpaid")
     row = (await db.execute(text("""update orders set payment_status='paid',status='received',
         paid_at=now(),payment_confirmed_by=:actor,payment_confirmation_reference=nullif(:reference,''),
         updated_at=now() where id=:id and payment_expires_at > now()
@@ -178,9 +271,11 @@ async def confirm_bank_transfer(order_id: UUID, payload: BankTransferConfirmatio
         raise HTTPException(409, "This payment window has expired; do not prepare the order")
     await db.execute(text("""update payments set status='paid',provider_payment_id=coalesce(
         nullif(:reference,''),provider_reference),raw_response=raw_response ||
-        jsonb_build_object('verified_by',cast(:actor as text),'verified_at',now()),updated_at=now()
+        jsonb_build_object('verified_by',cast(:actor as text),'verified_at',now()),
+        received_amount_minor=:received_amount,updated_at=now()
         where order_id=:id and provider='bank_transfer'"""), {"id": order_id,
-        "reference": payload.reference.strip(), "actor": principal.user_id})
+        "reference": payload.reference.strip(), "actor": principal.user_id,
+        "received_amount": payload.received_amount_minor})
     await db.execute(text("""insert into order_status_history(order_id,status,changed_by)
         values (:id,'received',:actor)"""), {"id": order_id, "actor": principal.user_id})
     await db.execute(text("""insert into notification_outbox(order_id,kind,recipient,payload)
@@ -267,7 +362,7 @@ async def manage_menu(db: AsyncSession = Depends(get_db)) -> dict[str, object]:
     category_rows = (await db.execute(text("""select id,name_en,name_tr,sort_order,is_active
         from categories order by sort_order,name_en"""))).mappings().all()
     item_rows = (await db.execute(text("""select id,category_id,name_en,name_tr,description_en,
-        description_tr,price_kurus,image_url,is_available,is_published,sort_order
+        description_tr,price_kurus,minimum_order_quantity,image_url,is_available,is_published,sort_order
         from menu_items order by sort_order,name_en"""))).mappings().all()
     categories: dict[UUID, dict[str, Any]] = {}
     items: dict[UUID, dict[str, Any]] = {}
@@ -282,6 +377,24 @@ async def manage_menu(db: AsyncSession = Depends(get_db)) -> dict[str, object]:
         parent_category = categories.get(row["category_id"])
         if parent_category:
             parent_category["items"].append(item)
+    modifier_rows = (await db.execute(text("""select m.id,m.menu_item_id,m.name_en,m.name_tr,
+        m.is_required,m.min_select,m.max_select,m.sort_order,o.id option_id,o.name_en option_name_en,
+        o.name_tr option_name_tr,o.price_delta_kurus,o.sort_order option_sort
+        from modifiers m join modifier_options o on o.modifier_id=m.id
+        order by m.sort_order,m.id,o.sort_order,o.id"""))).mappings().all()
+    modifier_groups: dict[UUID, dict[str, Any]] = {}
+    for row in modifier_rows:
+        group = modifier_groups.get(row["id"])
+        if group is None:
+            group = {"id": row["id"], "name_en": row["name_en"], "name_tr": row["name_tr"],
+                "is_required": row["is_required"], "min_select": row["min_select"],
+                "max_select": row["max_select"], "sort_order": row["sort_order"], "options": []}
+            modifier_groups[row["id"]] = group
+            if row["menu_item_id"] in items:
+                items[row["menu_item_id"]]["modifiers"].append(group)
+        group["options"].append({"id": row["option_id"], "name_en": row["option_name_en"],
+            "name_tr": row["option_name_tr"], "price_delta_kurus": row["price_delta_kurus"],
+            "sort_order": row["option_sort"]})
     return {"categories": list(categories.values())}
 
 
@@ -321,7 +434,8 @@ async def delete_category(category_id: UUID, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/menu/items/complete", status_code=201)
-async def create_item_complete(item: str = Form(), modifiers: str = Form(), image: UploadFile = File(),
+async def create_item_complete(item: str = Form(), modifiers: str = Form(),
+    image: UploadFile | None = File(default=None),
     storage: MenuImageStorage = Depends(get_menu_image_storage),
     db: AsyncSession = Depends(get_db)) -> dict[str, object]:
     return await create_complete_item(db, _item_payload(item), _modifier_payload(modifiers), image, storage)
@@ -337,9 +451,10 @@ async def edit_item_complete(item_id: UUID, item: str = Form(), modifiers: str =
 @router.post("/menu/items", status_code=201)
 async def create_item(payload: MenuItemWrite, db: AsyncSession = Depends(get_db)) -> dict[str, object]:
     row = (await db.execute(text("""insert into menu_items(category_id,name_en,name_tr,description_en,
-        description_tr,price_kurus,image_url,is_available,is_published,sort_order)
-        values (:category_id,:name_en,:name_tr,:description_en,:description_tr,:price_kurus,:image_url,
-        :is_available,:is_published,:sort_order) returning *"""), payload.model_dump())).mappings().one()
+        description_tr,price_kurus,minimum_order_quantity,image_url,is_available,is_published,sort_order)
+        values (:category_id,:name_en,:name_tr,:description_en,:description_tr,:price_kurus,
+        :minimum_order_quantity,:image_url,:is_available,:is_published,:sort_order)
+        returning *"""), payload.model_dump())).mappings().one()
     await db.commit()
     return dict(row)
 
@@ -350,7 +465,8 @@ async def edit_item(item_id: UUID, payload: MenuItemWrite,
     values = payload.model_dump() | {"id": item_id}
     row = (await db.execute(text("""update menu_items set category_id=:category_id,name_en=:name_en,
         name_tr=:name_tr,description_en=:description_en,description_tr=:description_tr,
-        price_kurus=:price_kurus,image_url=:image_url,is_available=:is_available,
+        price_kurus=:price_kurus,minimum_order_quantity=:minimum_order_quantity,
+        image_url=:image_url,is_available=:is_available,
         is_published=:is_published,sort_order=:sort_order where id=:id returning *"""), values)).mappings().first()
     if not row:
         raise HTTPException(404, "Menu item not found")

@@ -28,8 +28,8 @@ export function OrderTracker({token, locale, initial}: {token: string; locale: s
   const current = states.indexOf(order.status);
   return <><div className="eyebrow">{order.order_number}</div><h1>{t(`status.${order.status}`)}</h1><p className="tracking-poll-state">{connection}</p>
     {order.payment_method === 'bank_transfer' && order.payment_status === 'pending' && order.bank_transfer &&
-      <BankTransferPayment token={token} locale={locale} totalKurus={order.total_kurus}
-        instructions={order.bank_transfer} notifiedAt={order.transfer_notified_at}
+      <BankTransferPayment token={token} locale={locale} instructions={order.bank_transfer}
+        notifiedAt={order.transfer_notified_at}
         onUpdated={(value) => setOrder((currentOrder) => ({...currentOrder,
           transfer_notified_at: value.transfer_notified_at, payment_expires_at: value.payment_expires_at,
           bank_transfer: currentOrder.bank_transfer ? {...currentOrder.bank_transfer, expires_at: value.payment_expires_at} : null}))}/>} 

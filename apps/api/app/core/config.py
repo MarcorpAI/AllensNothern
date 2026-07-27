@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     app_url: str = "http://localhost:3000"
     api_url: str = "http://localhost:8000"
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:54322/postgres"
+    database_pool_size: int = Field(default=2, ge=1, le=10)
+    database_max_overflow: int = Field(default=1, ge=0, le=10)
+    database_pool_timeout_seconds: int = Field(default=10, ge=1, le=60)
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"])
 
     supabase_url: str = "http://127.0.0.1:54321"

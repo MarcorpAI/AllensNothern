@@ -40,7 +40,8 @@ export function MenuClient({menu, locale}: {menu: MenuResponse; locale: string})
       <h2>{category.name}</h2><div className="store-menu-grid">{category.items.map((item) => <article className="store-product" key={item.id}>
         <Link className="store-product-link" href={`/${locale}/menu/${item.id}`} aria-label={`${item.name}, ${money(item.price_kurus, locale)}`}>
           <div className="store-product-media">{item.image_url ? <Image src={item.image_url} alt={item.name} fill quality={90} sizes="(max-width: 550px) 46vw, (max-width: 900px) 45vw, 320px"/> : <div className="store-photo-fallback" aria-hidden="true"/>}{!item.is_available && <span className="store-flag">{t('soldOut')}</span>}</div>
-          <div className="store-product-heading"><h3>{item.name}</h3><strong>{money(item.price_kurus, locale)}</strong></div>
+          <div className="store-product-heading"><h3>{item.name}</h3><strong>{item.modifiers.length ? `${locale === 'tr' ? 'Başlangıç ' : 'From '}${money(item.price_kurus, locale)}` : money(item.price_kurus, locale)}</strong></div>
+          {item.minimum_order_quantity > 1 && <small>{locale === 'tr' ? `Minimum ${item.minimum_order_quantity} adet` : `Minimum ${item.minimum_order_quantity}`}</small>}
           <p>{item.description}</p>
         </Link>
       </article>)}</div>

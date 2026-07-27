@@ -25,6 +25,7 @@ export type AdminMenuItem = {
   description_en: string;
   description_tr: string;
   price_kurus: number;
+  minimum_order_quantity: number;
   image_url: string | null;
   is_available: boolean;
   is_published: boolean;

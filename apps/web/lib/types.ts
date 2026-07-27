@@ -23,6 +23,7 @@ export interface MenuItem {
   price_kurus: number;
   image_url: string | null;
   is_available: boolean;
+  minimum_order_quantity: number;
   modifiers: Modifier[];
 }
 
@@ -39,6 +40,12 @@ export interface CartLine {
   key: string;
   item: MenuItem;
   quantity: number;
+  selections: CartSelection[];
+}
+
+export interface CartSelection {
+  modifier_id: string;
+  option_ids: string[];
 }
 
 export interface Order {
@@ -60,9 +67,33 @@ export interface Order {
 
 export interface BankTransferInstructions {
   account_holder: string;
-  iban: string;
   bank_name: string;
+  account_label: string;
+  account_identifier: string;
+  currency: string;
+  amount_minor: number;
+  customer_rate: string;
   reference: string;
+  expires_at: string;
+}
+
+export interface PaymentRoute {
+  id: string;
+  code: string;
+  name: string;
+  route_type: 'local_transfer' | 'assisted';
+  currency: string | null;
+  contact_url: string;
+  rate_valid_until: string | null;
+}
+
+export interface PaymentQuote {
+  id: string;
+  route_id: string;
+  base_amount_kurus: number;
+  settlement_currency: string;
+  settlement_amount_minor: number;
+  customer_rate: string;
   expires_at: string;
 }
 
@@ -72,7 +103,16 @@ export interface PendingBankTransferOrder {
   customer_name: string;
   customer_email: string;
   customer_phone: string;
+  delivery_address: string;
+  delivery_instructions: string;
   total_kurus: number;
+  settlement_currency: string;
+  settlement_amount_minor: number;
+  payment_route_name: string;
+  transfer_sender_name: string | null;
+  transfer_customer_reference: string | null;
+  transfer_mismatch_note: string | null;
+  items: {item_name: string; quantity: number; selected_modifiers: KitchenModifierSelection[]}[];
   created_at: string;
   payment_expires_at: string;
   transfer_notified_at: string | null;

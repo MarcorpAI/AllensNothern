@@ -1,4 +1,5 @@
 import hashlib
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,6 +18,7 @@ from app.schemas import (
     SavedAddressOut,
     SavedAddressWrite,
     TrackedOrderOut,
+    TransferSentIn,
     TransferSentOut,
 )
 from app.services.bank_transfer import expire_bank_transfer_orders
@@ -45,22 +47,36 @@ async def track(token: str, db: AsyncSession = Depends(get_db),
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     row = (await db.execute(text("""select id,order_number,status,payment_status,customer_name,
         total_kurus,address_text,created_at,paid_at,payment_method,payment_expires_at,
-        transfer_notified_at from orders where tracking_token_hash=:hash"""),
+        transfer_notified_at,settlement_currency,settlement_amount_minor,exchange_rate,
+        payment_account_snapshot from orders where tracking_token_hash=:hash"""),
         {"hash": token_hash})).mappings().first()
     if not row:
         raise HTTPException(404, "Order not found")
     instructions = None
     if row["payment_method"] == "bank_transfer" and row["payment_status"] == "pending":
-        instructions = BankTransferInstructionsOut(account_holder=settings.bank_transfer_account_holder,
-            iban=settings.normalized_bank_transfer_iban, bank_name=settings.bank_transfer_bank_name,
+        snapshot = row["payment_account_snapshot"] or {
+            "account_holder": settings.bank_transfer_account_holder,
+            "bank_name": settings.bank_transfer_bank_name,
+            "account_label": "IBAN",
+            "account_identifier": settings.normalized_bank_transfer_iban,
+        }
+        instructions = BankTransferInstructionsOut(
+            account_holder=snapshot["account_holder"], bank_name=snapshot["bank_name"],
+            account_label=snapshot.get("account_label", "IBAN"),
+            account_identifier=snapshot["account_identifier"],
+            currency=row["settlement_currency"] or "TRY",
+            amount_minor=row["settlement_amount_minor"] or row["total_kurus"],
+            customer_rate=Decimal(str(row["exchange_rate"] or 1)),
             reference=row["order_number"], expires_at=row["payment_expires_at"])
     return dict(row) | {"delivery_address": row["address_text"], "bank_transfer": instructions,
                         "status_history": await _status_history(db, row["id"])}
 
 
 @router.post("/orders/track/{token}/transfer-sent", response_model=TransferSentOut)
-async def transfer_sent(token: str, db: AsyncSession = Depends(get_db),
+async def transfer_sent(token: str, payload: TransferSentIn, db: AsyncSession = Depends(get_db),
                         settings: Settings = Depends(get_settings)) -> dict[str, object]:
+    if not payload.amount_confirmed:
+        raise HTTPException(422, "Confirm that you sent the exact displayed amount")
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     row = (await db.execute(text("""select id,payment_status::text payment_status,payment_method,
         payment_expires_at,transfer_notified_at from orders where tracking_token_hash=:hash for update"""),
@@ -71,11 +87,15 @@ async def transfer_sent(token: str, db: AsyncSession = Depends(get_db),
         raise HTTPException(409, "This order is not awaiting a bank transfer")
     if row["transfer_notified_at"] is None:
         updated = (await db.execute(text("""update orders set transfer_notified_at=now(),
+            transfer_sender_name=:sender_name,transfer_customer_reference=nullif(:reference,''),
+            transfer_reported_amount_minor=settlement_amount_minor,
             payment_expires_at=now()+make_interval(mins => :minutes),
             capacity_reserved_until=now()+make_interval(mins => :minutes),updated_at=now()
             where id=:id and payment_expires_at > now()
             returning transfer_notified_at,payment_expires_at"""), {"id": row["id"],
-            "minutes": settings.bank_transfer_verification_minutes})).mappings().first()
+            "minutes": settings.bank_transfer_verification_minutes,
+            "sender_name": payload.sender_name.strip(),
+            "reference": payload.transaction_reference.strip()})).mappings().first()
         if not updated:
             await db.rollback()
             raise HTTPException(410, "The payment window has expired")

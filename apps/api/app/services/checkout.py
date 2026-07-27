@@ -28,12 +28,16 @@ class PricedLine:
 async def price_cart(db: AsyncSession, payload: CheckoutIn) -> list[PricedLine]:
     lines: list[PricedLine] = []
     for requested in payload.items:
-        row = (await db.execute(text("""select id,name_en,name_tr,price_kurus,is_available,is_published
+        row = (await db.execute(text("""select id,name_en,name_tr,price_kurus,minimum_order_quantity,
+            is_available,is_published
             from menu_items where id=:id for share"""), {"id": requested.menu_item_id})).mappings().first()
         if not row or not row["is_published"]:
             raise HTTPException(422, "A menu item no longer exists")
         if not row["is_available"]:
             raise HTTPException(409, f"{row['name_en']} is sold out")
+        if requested.quantity < row["minimum_order_quantity"]:
+            raise HTTPException(422,
+                f"{row['name_en']} requires at least {row['minimum_order_quantity']} per order")
         available = (await db.execute(text("""select m.id modifier_id,m.name_en modifier_name_en,
             m.name_tr modifier_name_tr,m.is_required,m.min_select,m.max_select,o.id option_id,
             o.name_en option_name_en,o.name_tr option_name_tr,o.price_delta_kurus

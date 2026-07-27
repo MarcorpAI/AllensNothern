@@ -26,6 +26,7 @@ class MenuItemWrite(BaseModel):
     description_en: str = Field(min_length=1, max_length=2000)
     description_tr: str = Field(default="", max_length=2000)
     price_kurus: int = Field(ge=0)
+    minimum_order_quantity: int = Field(default=1, ge=1, le=25)
     image_url: str | None = None
     is_available: bool = True
     is_published: bool = True
@@ -239,19 +240,23 @@ async def _replace_modifiers(db: AsyncSession, item_id: UUID, modifiers: list[Mo
 
 
 async def create_complete_item(db: AsyncSession, item: MenuItemWrite, modifiers: list[ModifierWrite],
-                               image: UploadFile, storage: MenuImageStorage) -> dict[str, object]:
+                               image: UploadFile | None, storage: MenuImageStorage) -> dict[str, object]:
     item_id = uuid4()
     stored: StoredImage | None = None
     try:
-        stored = await _store_image(storage, item_id, await prepare_image(image))
+        if image:
+            stored = await _store_image(storage, item_id, await prepare_image(image))
         values = item.model_dump(exclude={"image_url"}) | {
-            "id": item_id, "image_url": stored.variants["detail"],
-            "variants": json.dumps(stored.variants), "paths": json.dumps(stored.paths),
+            "id": item_id, "image_url": stored.variants["detail"] if stored else None,
+            "variants": json.dumps(stored.variants) if stored else "{}",
+            "paths": json.dumps(stored.paths) if stored else "[]",
         }
         row = (await db.execute(text("""insert into menu_items(id,category_id,name_en,name_tr,description_en,
-            description_tr,price_kurus,image_url,image_variants,image_storage_paths,is_available,is_published,sort_order)
-            values (:id,:category_id,:name_en,:name_tr,:description_en,:description_tr,:price_kurus,:image_url,
-            :variants,:paths,:is_available,:is_published,:sort_order) returning *"""), values)).mappings().one()
+            description_tr,price_kurus,minimum_order_quantity,image_url,image_variants,image_storage_paths,
+            is_available,is_published,sort_order)
+            values (:id,:category_id,:name_en,:name_tr,:description_en,:description_tr,:price_kurus,
+            :minimum_order_quantity,:image_url,:variants,:paths,:is_available,:is_published,:sort_order)
+            returning *"""), values)).mappings().one()
         await _replace_modifiers(db, item_id, modifiers)
         await db.commit()
         return dict(row)
@@ -285,7 +290,8 @@ async def update_complete_item(db: AsyncSession, item_id: UUID, item: MenuItemWr
         }
         row = (await db.execute(text("""update menu_items set category_id=:category_id,name_en=:name_en,
             name_tr=:name_tr,description_en=:description_en,description_tr=:description_tr,
-            price_kurus=:price_kurus,image_url=:image_url,image_variants=:variants,image_storage_paths=:paths,
+            price_kurus=:price_kurus,minimum_order_quantity=:minimum_order_quantity,
+            image_url=:image_url,image_variants=:variants,image_storage_paths=:paths,
             is_available=:is_available,is_published=:is_published,sort_order=:sort_order where id=:id returning *"""),
             values)).mappings().one()
         await _replace_modifiers(db, item_id, modifiers)

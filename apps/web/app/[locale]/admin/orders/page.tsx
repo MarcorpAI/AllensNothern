@@ -2,7 +2,7 @@
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {adminRequest} from '@/lib/admin-api';
-import {money} from '@/lib/money';
+import {currencyMoney, money} from '@/lib/money';
 import {useAppAuth} from '@/lib/auth';
 import type {KitchenOrderDetail, Order, PendingBankTransferOrder} from '@/lib/types';
 
@@ -134,11 +134,17 @@ export default function AdminOrders() {
   }
 
   async function confirmTransfer(order: PendingBankTransferOrder) {
-    if (!window.confirm(`Only continue if ${money(order.total_kurus, 'en')} is visible in your bank account for ${order.order_number}. A screenshot is not enough. Confirm payment?`)) return;
+    const expected = (order.settlement_amount_minor / 100).toFixed(2);
+    const entered = window.prompt(`Enter the amount visible in the ${order.settlement_currency} receiving account. Expected ${expected}.`, expected);
+    if (entered === null) return;
+    const receivedAmount = Math.round(Number(entered) * 100);
+    if (!Number.isFinite(receivedAmount) || receivedAmount < 0) {setError('Enter a valid received amount.'); return;}
+    if (!window.confirm(`Confirm ${currencyMoney(receivedAmount, order.settlement_currency, 'en')} is visible for ${order.order_number}? A screenshot is not enough.`)) return;
     setUpdatingId(order.id);
     try {
       await adminRequest(`/orders/${order.id}/confirm-bank-transfer`, await getToken(),
-        {method: 'POST', body: JSON.stringify({reference: order.order_number})});
+        {method: 'POST', body: JSON.stringify({reference: order.transfer_customer_reference ?? order.order_number,
+          received_amount_minor: receivedAmount, mismatch_note: receivedAmount < order.settlement_amount_minor ? 'Customer underpaid' : ''})});
       await load();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not confirm this transfer.');
@@ -153,8 +159,11 @@ export default function AdminOrders() {
       <div className="section-header"><div><h2 id="payment-review-title">Payments to check</h2><p>Confirm an order only after the exact amount appears in your bank account.</p></div><strong>{paymentOrders.length}</strong></div>
       {!paymentOrders.length && <div className="empty-state">No bank transfers are waiting.</div>}
       <div className="payment-review-list">{paymentOrders.map((order) => <article key={order.id} className={order.transfer_notified_at ? 'payment-review-card reported' : 'payment-review-card'}>
-        <div><span className="eyebrow">{order.transfer_notified_at ? 'Customer says transfer sent' : 'Waiting for customer'}</span><h3>{order.order_number}</h3><p>{order.customer_name} · <a href={`tel:${order.customer_phone}`}>{order.customer_phone}</a></p><small>Expires {new Date(order.payment_expires_at).toLocaleTimeString('en', {hour: '2-digit', minute: '2-digit'})}</small></div>
-        <strong>{money(order.total_kurus, 'en')}</strong>
+        <div><span className="eyebrow">{order.transfer_notified_at ? 'Customer says transfer sent' : 'Waiting for customer — do not prepare'}</span><h3>{order.order_number}</h3><p>{order.customer_name} · <a href={`tel:${order.customer_phone}`}>{order.customer_phone}</a></p>
+          <div className="pending-order-items">{order.items.map((item, index) => <div key={`${item.item_name}-${index}`}><strong>{item.quantity}× {item.item_name}</strong>{item.selected_modifiers.map((modifier) => <small key={modifier.id}>{modifier.name_en}: {modifier.options.map((option) => option.name_en).join(', ')}</small>)}</div>)}</div>
+          <small>Deliver to: {order.delivery_address}{order.delivery_instructions ? ` · ${order.delivery_instructions}` : ''}</small>
+          <small>{order.payment_route_name} · Sender: {order.transfer_sender_name || 'not reported'} · Ref: {order.transfer_customer_reference || order.order_number}</small>{order.transfer_mismatch_note && <small className="store-error">{order.transfer_mismatch_note}</small>}<small>Expires {new Date(order.payment_expires_at).toLocaleTimeString('en', {hour: '2-digit', minute: '2-digit'})}</small></div>
+        <strong>{currencyMoney(order.settlement_amount_minor, order.settlement_currency, 'en')}<small>{money(order.total_kurus, 'en')} base</small></strong>
         <button className="button orange" type="button" disabled={updatingId === order.id} onClick={() => void confirmTransfer(order)}>{updatingId === order.id ? 'Confirming…' : 'Confirm money received'}</button>
       </article>)}</div>
     </section>

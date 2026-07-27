@@ -1,6 +1,6 @@
 # AllensNothern Project Memory and Handoff
 
-> Last audited: 16 July 2026  
+> Last audited: 27 July 2026
 > Repository root: `/home/kaave/projects/AllensNothern`  
 > Original product specification: `ecommerce-spec.md`
 
@@ -113,7 +113,8 @@ The initial migration creates the following core tables:
 - `delivery_zones` — PostGIS polygon, fee, priority, and active state.
 - `categories` — bilingual menu sections.
 - `menu_items` — bilingual food item data, price, picture URL, publishing, and availability.
-- `modifiers` and `modifier_options` — legacy compatibility tables; migration `202607150007_simple_menu.sql` removes all live rows because choices/add-ons are outside the current product.
+- `modifiers` and `modifier_options` — required protein groups and their priced choices for rice and
+  soup items; order snapshots preserve historical selections.
 - `addresses` — saved user addresses and geographic points.
 - `orders` — customer, delivery, pricing, payment, tracking, and fulfillment state.
 - `order_items` — frozen item names, selected choices, quantities, and prices.
@@ -144,11 +145,11 @@ The initial migration creates the following core tables:
 At the time of this audit, the local database contains:
 
 - Four deterministic Nigerian development categories: Rice Dishes, Soups & Swallows, Grills & Proteins, and Sides & Small Chops.
-- Eight published, available Nigerian development menu items with prices and matching food pictures.
+- Thirty-seven real-menu items across Rice, Swallow, Soups, Proteins & Grills, and Snacks. Unconfirmed prices are explicitly temporary and images are optional.
 - One sample Istanbul delivery zone.
 - No paid orders.
 
-The seed is additive and idempotent: stable UUIDs are upserted without deleting users, addresses, capacity rules, or test orders. Its eight generated Nigerian food pictures live in `apps/web/public/seed-menu` and use local `/seed-menu/...` URLs, so seeded storefront browsing does not depend on Supabase Storage credentials. Normal administrator picture uploads still use the `menu-images` Storage bucket.
+The seed is additive and idempotent: stable UUIDs are upserted without deleting users, addresses, capacity rules, or test orders. Pictures may be added later through the administrator; old mismatched development pictures are cleared.
 
 The seed delivery polygon, menu items, prices, delivery fee, hours, and content are development samples. They must not be treated as the real restaurant configuration.
 
@@ -157,6 +158,15 @@ The seed delivery polygon, menu items, prices, delivery fee, hours, and content 
 ## 4. What Has Been Built and Is Working
 
 “Working” in this section means the implementation exists and has passed the available local static or integration checks. It does not automatically mean that an external production provider has been configured.
+
+### Multi-currency manual transfers
+
+- TRY remains the canonical menu and reporting currency. Checkout supports enabled local-transfer routes such as TRY and NGN, with owner-managed accounts and protected customer rates in **Admin → Payments**.
+- Foreign-currency quotes are calculated server-side, rounded upward by the route setting, expire automatically, and are frozen with the account details on the resulting order.
+- International SWIFT is an assisted contact route only; it does not create an order or reserve kitchen capacity.
+- A customer transfer report records the sending name and optional bank reference but never marks an order paid. Staff enter the amount visible in the receiving account, and underpayments remain outside the kitchen queue.
+- The seeded TRY and NGN routes are disabled until real account details are configured. Foreign routes additionally require a current rate-valid-until time.
+- Checkout accepts international phone numbers for tourists while retaining Turkish local-number normalization.
 
 ### 4.1 Bilingual storefront shell
 
@@ -187,20 +197,26 @@ The seed delivery polygon, menu items, prices, delivery fee, hours, and content 
 
 ### 4.3 Simple food ordering
 
-- Choices, add-ons, and required-selection controls have been removed from both the administrator editor and customer storefront.
-- The administrator food form contains only section, price, food name, picture, description, position, availability, and publishing controls.
+- Rice and soup items require exactly one protein choice. The selected protein and its price are carried through the cart, server-side repricing, order snapshot, and kitchen ticket.
+- The administrator food form manages section, price, minimum quantity, food name, picture,
+  description, position, availability, publishing, and required protein choices.
 - Turkish item fields are hidden; the API receives the English name/description as safe fallback values for the existing bilingual schema.
 - The dish page includes quantity controls, a sticky total-aware add button, and sold-out states.
 - Customers may add available dishes and check out regardless of the restaurant-open flag; operating hours do not block ordering.
-- The server independently validates current prices, publication state, and sold-out state. Legacy modifier validation remains only for API/database compatibility and historical tests; the live public menu returns no modifiers and checkout sends none.
-- Customer cart persistence moved to version 2 and intentionally discards old customized cart lines.
+- The server independently validates current prices, publication state, sold-out state, per-item minimum quantities, and required protein choices.
+- Customer cart persistence is at version 4. Its migration intentionally discards legacy cart lines
+  left behind before successful checkout began consuming the cart.
 
 ### 4.4 Cart
 
 - The cart persists in local browser storage.
-- Identical food items merge and increment quantity.
+- Identical food items with the same protein selections merge and increment quantity; different
+  selections remain separate lines.
 - Customers can increase/decrease quantity or remove a line.
-- Line totals and subtotal use the food's single current price.
+- Snack minimum quantities are enforced in the UI and again by the API.
+- Line totals and subtotal include selected protein price deltas.
+- A successfully created order immediately consumes the cart and checkout draft. Transfer reporting
+  and administrator payment verification remain available through the saved tracking token.
 
 #### Consistent food pictures
 
@@ -227,7 +243,8 @@ The seed delivery polygon, menu items, prices, delivery fee, hours, and content 
 - Signed-in checkout associates orders with the verified Supabase Auth user. Checkout retains a conflict-safe profile-shell upsert as protection against lifecycle-trigger failure.
 - Contact name, email, phone, address, instructions, pin, items, and quantities are submitted.
 - Signed-in customer details are prefilled, saved addresses can be selected/edited/deleted, and every selected or edited location is revalidated against current delivery coverage.
-- Turkish mobile numbers accept common local/international input forms and are normalized to `+905XXXXXXXXX` before storage.
+- Turkish mobile numbers accept common local/international input forms and are normalized to
+  `+905XXXXXXXXX`; valid international numbers are retained for tourists.
 - Checkout requires explicit terms/privacy consent and records its timestamp plus the submitted legal-content version. The current `prelaunch-v1` copy is a functional hook, not approved legal text.
 - Checkout intentionally accepts orders outside configured operating hours; individual sold-out state, publication state, and delivery coverage are still enforced.
 - Delivery zone and fee are recalculated on the server.
@@ -235,12 +252,14 @@ The seed delivery polygon, menu items, prices, delivery fee, hours, and content 
 - Checkout requires an idempotency key and returns the same stored response if the same key is repeated.
 - A cryptographically random guest tracking token is generated; only its SHA-256 hash is stored.
 - Orders and order item snapshots are stored before bank instructions are returned.
-- The cart and local checkout draft remain available until payment is confirmed.
-- Checkout returns the configured account holder, IBAN, optional bank name, exact amount, unique order-number reference, and payment deadline.
+- The cart and local checkout draft are cleared once the API has successfully created the order.
+- Checkout returns the frozen account label/identifier, holder, optional bank name, settlement
+  currency and amount, unique order-number reference, and payment deadline for the selected route.
 
 ### 4.7 Bank-transfer payments
 
-- Manual FAST/bank transfer is the selected launch payment method for guest and signed-in checkout.
+- Manual bank transfer is the selected launch payment method for guest and signed-in checkout.
+  Enabled TRY and NGN local routes are selectable; international SWIFT remains an assisted-contact route.
 - “I completed the transfer” records customer acknowledgement and extends the reservation once for a bounded verification period; it never marks an order paid.
 - The English-only administrator dashboard has a plain-language “Payments to check” queue showing the exact amount, customer, deadline, and whether the customer reported sending funds.
 - Only an authorized administrator can confirm funds. Confirmation atomically changes `pending → paid`, moves fulfillment to `received`, records status history/audit/payment reference, and creates the notification job.
@@ -292,12 +311,14 @@ The seed delivery polygon, menu items, prices, delivery fee, hours, and content 
 - Pictures are proportionally contained and padded—never center-cropped—into consistent 600×450 card and 1200×900 detail WebP derivatives in the public Supabase Storage `menu-images` bucket.
 - A preview is shown before saving/replacing a picture.
 - The browser receives a public Supabase URL rather than the container-only internal URL.
-- The editor sends item data, an explicitly empty compatibility modifier list, and the required create image or optional replacement image in one coordinated multipart operation.
+- The editor sends item data, protein modifier groups, and the required create image or optional
+  replacement image in one coordinated multipart operation.
 - Item/modifier database changes commit together; new image objects are deleted if image, modifier, or database work fails.
 - Replaced and deleted item objects are removed after a successful database commit.
 - Storage deletion failures are durably recorded and retried by the worker, so objects are never abandoned without cleanup ownership.
 - The earlier item, modifier, and image endpoints remain temporarily available for compatibility; the compatibility image/delete paths use the same validated derivative and cleanup behavior.
-- Choices/add-ons and required-selection controls are no longer exposed by the live administrator or customer interfaces. Existing compatibility endpoints remain temporarily available, and migration `202607150007_simple_menu.sql` cleared current modifier rows without changing historical order snapshots.
+- Required protein selection is exposed for rice and soup items. Historical modifier snapshots remain
+  frozen on order items even when live choices are later changed.
 - Sold-out/available is a one-tap control on the menu list.
 - Availability changes are optimistic in the UI and roll back if the API fails.
 - Availability changes are written to the audit log.
@@ -433,7 +454,10 @@ All routes below are under `/api/v1` unless noted.
 
 ## 6. Verification State
 
-The latest completed verification passed:
+Historical verification from earlier batches is listed below. The 27 July 2026 deployment-checkpoint
+run additionally passed frontend TypeScript, ESLint, five unit tests and a production build, plus
+backend Ruff, strict MyPy and three unit tests. Database migration validation is recorded separately
+when the local Supabase container is available.
 
 - Frontend TypeScript type checking.
 - Frontend ESLint.
@@ -459,7 +483,9 @@ At the time of this audit:
 - Local Supabase database and Storage are available.
 - Local Supabase publishable and service-role keys are configured without being committed.
 - Local Supabase Auth is enabled and its profile lifecycle migration has been applied successfully.
-- The hosted Supabase project has migrations through `202607150008_bank_transfer_payments.sql` applied; hosted registration and confirmation delivery have been verified.
+- The hosted Supabase project was last confirmed through
+  `202607150008_bank_transfer_payments.sql`; the multi-currency and minimum-quantity migrations still
+  need to be applied during production deployment.
 - `MAP_CONTACT_EMAIL` is configured locally.
 - The current root `.env` points Storage at the hosted project but still contains a local-development service-role JWT (`issuer=supabase-demo`). A live write check is rejected with signature verification failure. Replace `SUPABASE_SERVICE_ROLE_KEY` with the server-only key from project `bzvuqavmnuxvwfozmpnz` and recreate the API/worker containers before testing real menu uploads again. The UI multipart path itself is browser-tested, and Storage credential failures now produce an actionable administrator message.
 
@@ -480,9 +506,13 @@ The Batch 1 correctness and Batch 2 transactional menu/image paths are automated
 
 ## 7. What Is Partial, Not Working, or Not Production-Ready
 
-### 7.1 Receiving bank details must be configured
+### 7.1 Receiving routes must be configured
 
-The bank-transfer flow is complete, but the repository deliberately does not contain a real account holder or IBAN. Before checkout can accept an order, set `BANK_TRANSFER_ACCOUNT_HOLDER` and `BANK_TRANSFER_IBAN` in the API/worker environment; `BANK_TRANSFER_BANK_NAME` is optional. Missing details produce an explicit service-unavailable response rather than displaying fake payment information.
+The bank-transfer flow is complete, but the repository deliberately does not contain real receiving
+account details. Before checkout can accept an order, the owner must configure and enable at least one
+local transfer route in **Admin → Payments**. Foreign-currency routes also require a protected customer
+rate and validity deadline. International SWIFT is an assisted contact route rather than an automatic
+checkout route.
 
 The live operational limitation is manual reconciliation: the owner must check the receiving bank application and confirm the exact amount in the administrator dashboard. Customer acknowledgement and screenshots are never treated as payment. The dormant Iyzico adapter is future-only and is not the selected checkout path.
 
@@ -538,13 +568,15 @@ The bilingual account lists paid orders and saved addresses. Owned order details
 
 ### 7.10 Checkout UX — Batch 7 complete for lean v1
 
-- Turkish mobile numbers are normalized and strictly validated on both client and server.
+- Turkish mobile numbers are normalized on both client and server, while valid international numbers
+  are accepted for tourists.
 - Address search still depends on a public service with no SLA.
 - The form assumes Istanbul/Turkey in the Iyzico request.
 - Required terms/privacy consent is recorded, but owner-approved legal copy and its production version are Batch 9 inputs.
 - There is no scheduled-order flow.
 - There is no cash-on-delivery flow.
-- Failed/abandoned payment returns retain the cart and locally persisted form, and show retry/support actions. The support address must be configured before launch.
+- Failed checkout submission retains the cart and locally persisted form. Once an order is created,
+  the cart is consumed and recovery continues through its saved tracking token.
 
 ### 7.11 Tracking — Batch 7 complete for lean v1; notifications remain basic
 
@@ -593,9 +625,10 @@ There is no confirmed live staging or production environment. The following rema
 
 ### 7.15 Business content is still sample content
 
-Before launch, replace:
+Before launch, review or replace:
 
-- The four Nigerian development categories, eight development dishes, generated pictures, descriptions, and sample prices.
+- The five seeded real-menu categories and thirty-seven dishes. Prices are provisional and images are
+  intentionally optional so the owner can upload them through the administrator.
 - Sample delivery polygon and ₺75 sample fee.
 - Seed opening hours.
 - Placeholder brand copy and icon if not final.
