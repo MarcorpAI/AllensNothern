@@ -63,6 +63,8 @@ export interface Order {
   transfer_notified_at?: string | null;
   bank_transfer?: BankTransferInstructions | null;
   status_history?: OrderStatusHistory[];
+  locale?: Locale;
+  items?: CustomerOrderItem[];
 }
 
 export interface BankTransferInstructions {

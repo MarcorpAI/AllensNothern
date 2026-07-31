@@ -3,6 +3,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {adminRequest} from '@/lib/admin-api';
 import {currencyMoney, money} from '@/lib/money';
+import {modifierOptionCounts} from '@/lib/modifier-display';
 import {useAppAuth} from '@/lib/auth';
 import type {KitchenOrderDetail, Order, PendingBankTransferOrder} from '@/lib/types';
 
@@ -160,7 +161,7 @@ export default function AdminOrders() {
       {!paymentOrders.length && <div className="empty-state">No bank transfers are waiting.</div>}
       <div className="payment-review-list">{paymentOrders.map((order) => <article key={order.id} className={order.transfer_notified_at ? 'payment-review-card reported' : 'payment-review-card'}>
         <div><span className="eyebrow">{order.transfer_notified_at ? 'Customer says transfer sent' : 'Waiting for customer — do not prepare'}</span><h3>{order.order_number}</h3><p>{order.customer_name} · <a href={`tel:${order.customer_phone}`}>{order.customer_phone}</a></p>
-          <div className="pending-order-items">{order.items.map((item, index) => <div key={`${item.item_name}-${index}`}><strong>{item.quantity}× {item.item_name}</strong>{item.selected_modifiers.map((modifier) => <small key={modifier.id}>{modifier.name_en}: {modifier.options.map((option) => option.name_en).join(', ')}</small>)}</div>)}</div>
+          <div className="pending-order-items">{order.items.map((item, index) => <div key={`${item.item_name}-${index}`}><strong>{item.quantity}× {item.item_name}</strong>{item.selected_modifiers.map((modifier) => <small key={modifier.id}>{modifier.name_en}: {modifierOptionCounts(modifier)}</small>)}</div>)}</div>
           <small>Deliver to: {order.delivery_address}{order.delivery_instructions ? ` · ${order.delivery_instructions}` : ''}</small>
           <small>{order.payment_route_name} · Sender: {order.transfer_sender_name || 'not reported'} · Ref: {order.transfer_customer_reference || order.order_number}</small>{order.transfer_mismatch_note && <small className="store-error">{order.transfer_mismatch_note}</small>}<small>Expires {new Date(order.payment_expires_at).toLocaleTimeString('en', {hour: '2-digit', minute: '2-digit'})}</small></div>
         <strong>{currencyMoney(order.settlement_amount_minor, order.settlement_currency, 'en')}<small>{money(order.total_kurus, 'en')} base</small></strong>
@@ -179,7 +180,7 @@ export default function AdminOrders() {
       {!detailLoading && !detail && <div className="empty-state">Select an order to open its kitchen ticket.</div>}
       {!detailLoading && detail && <><header><div><span className="eyebrow">Paid kitchen ticket</span><h2>{detail.order_number}</h2></div><strong className="kitchen-ticket-age">{elapsedMinutes(detail, now)} min</strong></header>
         <div className="kitchen-ticket-meta"><strong>{displayStatus(detail.status)}</strong><span>Paid {detail.paid_at ? new Date(detail.paid_at).toLocaleTimeString('en', {hour: '2-digit', minute: '2-digit'}) : 'time unavailable'}</span></div>
-        <div className="kitchen-items">{detail.items.map((item) => <div className="kitchen-item" key={item.id}><strong><span>{item.quantity}×</span> {item.item_name}</strong>{item.selected_modifiers.map((modifier) => <p key={modifier.id}>{modifier.name_en}: {modifier.options.map((option) => option.name_en).join(', ')}</p>)}</div>)}</div>
+        <div className="kitchen-items">{detail.items.map((item) => <div className="kitchen-item" key={item.id}><strong><span>{item.quantity}×</span> {item.item_name}</strong>{item.selected_modifiers.map((modifier) => <p key={modifier.id}>{modifier.name_en}: {modifierOptionCounts(modifier)}</p>)}</div>)}</div>
         <section className="kitchen-customer"><h3>Delivery</h3><strong>{detail.customer_name}</strong><a href={`tel:${detail.customer_phone}`}>{detail.customer_phone}</a><a href={`mailto:${detail.customer_email}`}>{detail.customer_email}</a><p>{detail.delivery_address}</p><small>{detail.delivery_zone_name}</small>{detail.delivery_instructions && <div className="kitchen-instructions"><strong>Instructions</strong><p>{detail.delivery_instructions}</p></div>}</section>
         <div className="kitchen-totals"><span>Total</span><strong>{money(detail.total_kurus, 'en')}</strong></div>
         <dl className="kitchen-reference"><dt>Payment reference</dt><dd>{detail.payment_reference ?? 'Not supplied'}</dd><dt>Ordered</dt><dd>{new Date(detail.created_at).toLocaleString('en')}</dd></dl>

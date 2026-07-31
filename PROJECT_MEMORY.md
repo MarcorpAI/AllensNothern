@@ -216,7 +216,7 @@ The seed delivery polygon, menu items, prices, delivery fee, hours, and content 
   selections remain separate lines.
 - Customers can increase/decrease quantity or remove a line.
 - Snack minimum quantities are enforced in the UI and again by the API.
-- Line totals and subtotal include selected protein price deltas.
+- Line totals and subtotal include every selected protein portion's price delta. Cart, customer tracking/order details, payment review, and kitchen tickets aggregate repeated portions as explicit counts such as `Chicken × 3`.
 - A successfully created order immediately consumes the cart and checkout draft. Transfer reporting
   and administrator payment verification remain available through the saved tracking token.
 

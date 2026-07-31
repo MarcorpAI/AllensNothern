@@ -4,6 +4,7 @@ import {useEffect, useState} from 'react';
 import {useTranslations} from 'next-intl';
 import {trackOrder} from '@/lib/api';
 import {money} from '@/lib/money';
+import {modifierOptionCounts} from '@/lib/modifier-display';
 import type {Order} from '@/lib/types';
 import {BankTransferPayment} from '@/components/bank-transfer-payment';
 import {useCart} from '@/lib/cart';
@@ -36,5 +37,6 @@ export function OrderTracker({token, locale, initial}: {token: string; locale: s
     {order.payment_method === 'bank_transfer' && order.payment_status === 'failed' &&
       <div className="checkout-recovery" role="alert"><strong>{t('expired')}</strong><p>{t('expiredHelp')}</p></div>}
     <div className="status-track">{states.map((state, index) => {const history = order.status_history?.find((entry) => entry.status === state); return <div className={index <= current ? 'status-step done' : 'status-step'} key={state}><strong>{t(`status.${state}`)}</strong>{history && <time>{new Intl.DateTimeFormat(locale, {dateStyle: 'medium', timeStyle: 'short'}).format(new Date(history.changed_at))}</time>}</div>;})}</div>
+    {order.items && <div className="form-card"><h2>{locale === 'tr' ? 'Ürünler' : 'Items'}</h2>{order.items.map((item) => <article className="customer-order-item" key={item.id}><strong><span>{item.quantity}×</span> {item.item_name}</strong><b>{money(item.line_total_kurus, locale)}</b>{item.selected_modifiers.map((modifier) => <p key={modifier.id}>{locale === 'tr' ? modifier.name_tr : modifier.name_en}: {modifierOptionCounts(modifier, locale)}</p>)}</article>)}</div>}
     <div className="form-card"><p><strong>{order.customer_name}</strong></p><p>{order.delivery_address}</p><p className="price">{money(order.total_kurus, locale)}</p></div></>;
 }

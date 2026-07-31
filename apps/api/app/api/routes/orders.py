@@ -45,13 +45,17 @@ async def track(token: str, db: AsyncSession = Depends(get_db),
     if await expire_bank_transfer_orders(db):
         await db.commit()
     token_hash = hashlib.sha256(token.encode()).hexdigest()
-    row = (await db.execute(text("""select id,order_number,status,payment_status,customer_name,
+    row = (await db.execute(text("""select id,order_number,status,payment_status,locale,customer_name,
         total_kurus,address_text,created_at,paid_at,payment_method,payment_expires_at,
         transfer_notified_at,settlement_currency,settlement_amount_minor,exchange_rate,
         payment_account_snapshot from orders where tracking_token_hash=:hash"""),
         {"hash": token_hash})).mappings().first()
     if not row:
         raise HTTPException(404, "Order not found")
+    suffix = "tr" if row["locale"] == "tr" else "en"
+    items = (await db.execute(text(f"""select id,item_name_{suffix} item_name,quantity,
+        unit_price_kurus,line_total_kurus,selected_modifiers from order_items
+        where order_id=:id order by id"""), {"id": row["id"]})).mappings().all()
     instructions = None
     if row["payment_method"] == "bank_transfer" and row["payment_status"] == "pending":
         snapshot = row["payment_account_snapshot"] or {
@@ -69,6 +73,7 @@ async def track(token: str, db: AsyncSession = Depends(get_db),
             customer_rate=Decimal(str(row["exchange_rate"] or 1)),
             reference=row["order_number"], expires_at=row["payment_expires_at"])
     return dict(row) | {"delivery_address": row["address_text"], "bank_transfer": instructions,
+                        "items": [dict(item) for item in items],
                         "status_history": await _status_history(db, row["id"])}
 
 

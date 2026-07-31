@@ -6,6 +6,7 @@ import {Minus, Plus} from 'lucide-react';
 import {useParams} from 'next/navigation';
 import {useTranslations} from 'next-intl';
 import {linePrice, useCart} from '@/lib/cart';
+import {countedNames} from '@/lib/modifier-display';
 import {money} from '@/lib/money';
 
 export default function CartPage() {
@@ -16,8 +17,9 @@ export default function CartPage() {
 
   return <div className="store-page store-cart-page"><header className="store-page-heading"><h1>{t('title')}</h1></header>{!lines.length ? <div className="store-empty"><p>{t('empty')}</p><Link className="store-button secondary" href={`/${locale}/menu`}>{t('menu')}</Link></div> :
     <div className="store-cart-layout"><div className="store-cart-lines">{lines.map((line) => {
-      const choices = line.selections.flatMap((selection) => selection.option_ids.map((id) =>
-        line.item.modifiers.flatMap((modifier) => modifier.options).find((option) => option.id === id)?.name)).filter(Boolean);
+      const choices = countedNames(line.selections.flatMap((selection) => selection.option_ids.map((id) =>
+        line.item.modifiers.flatMap((modifier) => modifier.options).find((option) => option.id === id)?.name))
+        .filter((name): name is string => Boolean(name)));
       return <article className="store-cart-line" key={line.key}><Link className="store-cart-thumb" href={`/${locale}/menu/${line.item.id}`}>{line.item.image_url ? <Image src={line.item.image_url} alt="" fill sizes="110px"/> : <span className="store-photo-fallback"/>}</Link><div className="store-cart-copy"><h2>{line.item.name}</h2>{choices.length > 0 && <p>{choices.join(', ')}</p>}<div className="store-cart-actions"><button type="button" onClick={() => remove(line.key)}>{t('remove')}</button></div></div><div className="store-quantity"><button type="button" onClick={() => setQuantity(line.key, line.quantity - 1)} disabled={line.quantity <= line.item.minimum_order_quantity} aria-label={t('decrease')}><Minus/></button><span>{line.quantity}</span><button type="button" onClick={() => setQuantity(line.key, line.quantity + 1)} aria-label={t('increase')}><Plus/></button></div><strong className="store-cart-price">{money(linePrice(line), locale)}</strong></article>;
     })}</div><aside className="store-summary"><div className="store-summary-row"><strong>{t('subtotal')}</strong><strong>{money(subtotal, locale)}</strong></div><Link className="store-button primary" href={`/${locale}/checkout`}>{t('checkout')}</Link></aside></div>}
   </div>;

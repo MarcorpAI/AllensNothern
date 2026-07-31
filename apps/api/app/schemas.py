@@ -315,8 +315,10 @@ class CustomerOrderDetailOut(OrderOut):
 
 
 class TrackedOrderOut(OrderOut):
+    locale: Literal["en", "tr"]
     payment_method: Literal["bank_transfer", "iyzico"]
     payment_expires_at: datetime | None = None
     transfer_notified_at: datetime | None = None
     bank_transfer: BankTransferInstructionsOut | None = None
+    items: list[CustomerOrderItemOut]
     status_history: list[KitchenStatusHistoryOut]
