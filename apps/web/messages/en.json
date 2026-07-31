@@ -15,6 +15,7 @@
   "tracking": {"updated": "Order status is up to date.", "retrying": "Connection interrupted. Retrying automatically…", "expired": "Payment window expired", "expiredHelp": "Do not transfer money for this order. Place a new order or contact support if you already paid.", "status": {"pending_payment": "Awaiting bank transfer", "received": "Received", "preparing": "Preparing", "out_for_delivery": "Out for delivery", "delivered": "Delivered"}},
   "footer": {"tagline": "Nigerian comfort food, thoughtfully made in Istanbul."},
   "auth": {
+    "kicker": "Allen’s Northern Restaurant", "welcome": "Good food feels even better when it knows you.", "intro": "Sign in to revisit your orders, keep delivery details close, and get back to the table faster.", "accountKicker": "Your account",
     "email": "Email", "username": "Username", "password": "Password", "newPassword": "New password", "working": "Please wait…", "genericError": "Authentication could not be completed.",
     "sign-in": {"title": "Sign in", "submit": "Sign in"},
     "sign-up": {"title": "Create your account", "submit": "Create account"},

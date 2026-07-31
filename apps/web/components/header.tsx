@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import {Menu, ShoppingBag, X} from 'lucide-react';
 import {useTranslations} from 'next-intl';
@@ -16,7 +17,9 @@ export function Header({locale}: {locale: string}) {
   const other = locale === 'en' ? 'tr' : 'en';
   const localizedPath = pathname.replace(new RegExp(`^/${locale}(?=/|$)`), `/${other}`);
   return <header className="store-header">
-    <Link className="store-brand" href={`/${locale}`}>ALLENS<span>NOTHERN</span></Link>
+    <Link className="store-brand store-logo-link" href={`/${locale}`} aria-label="Allen's Northern Restaurant">
+      <Image src="/allens-navbar-logo.png" alt="Allen's — One for the culture" width={240} height={120} priority/>
+    </Link>
     <button className="store-icon-button store-menu-button" type="button" onClick={() => setOpen(!open)} aria-label={t('toggle')} aria-expanded={open}>{open ? <X/> : <Menu/>}</button>
     <nav className={open ? 'store-nav open' : 'store-nav'} aria-label={t('primary')}>
       <Link href={`/${locale}`} onClick={() => setOpen(false)}>{t('home')}</Link><Link href={`/${locale}/menu`} onClick={() => setOpen(false)}>{t('menu')}</Link>

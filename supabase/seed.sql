@@ -83,7 +83,7 @@ on conflict(id) do update set category_id=excluded.category_id,name_en=excluded.
     else coalesce(menu_items.image_url,excluded.image_url) end,is_available=excluded.is_available,
   is_published=excluded.is_published,sort_order=excluded.sort_order;
 
--- Required, exactly-one protein group for every rice and soup item.
+-- Required protein group for every rice and soup item. Repeated selections represent extra portions.
 delete from modifiers where menu_item_id in (
   select id from menu_items where category_id in (
     '20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000003'
@@ -92,7 +92,7 @@ delete from modifiers where menu_item_id in (
 
 insert into modifiers(id,menu_item_id,name_en,name_tr,is_required,min_select,max_select,sort_order)
 select ('40000000-0000-4000-8000-' || right(item.id::text,12))::uuid,
-  item.id,'Choose your protein','Choose your protein',true,1,1,10
+  item.id,'Choose your protein','Choose your protein',true,1,25,10
 from menu_items item
 where item.category_id in (
   '20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000003'

@@ -69,8 +69,8 @@ class ModifierWrite(BaseModel):
     def validate_group(self) -> "ModifierWrite":
         self.name_en = self.name_en.strip()
         self.name_tr = self.name_tr.strip() or self.name_en
-        if self.min_select > self.max_select or self.max_select > len(self.options):
-            raise ValueError("Modifier selection limits must match the number of choices")
+        if self.min_select > self.max_select:
+            raise ValueError("The minimum selection limit cannot exceed the maximum")
         if self.is_required and self.min_select < 1:
             raise ValueError("Required modifier groups must require at least one choice")
         return self

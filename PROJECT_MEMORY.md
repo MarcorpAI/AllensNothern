@@ -174,8 +174,10 @@ The seed delivery polygon, menu items, prices, delivery fee, hours, and content 
 - The header links to home, menu, cart, account/sign-in, and the alternate locale.
 - Locale switching preserves the current localized path.
 - Core home, menu, cart, and checkout labels have English and Turkish messages.
+- Customer sign-in, sign-up, password recovery, and account pages use the same cream, deep-brown, orange, Bricolage Grotesque, square-control, and editorial-spacing system as the main storefront.
 - Currency formatting uses Turkish lira.
 - Responsive styles and mobile navigation are implemented.
+- The storefront navbar uses the supplied stylized Allen's wordmark and “ONE FOR THE CULTURE” ribbon as a transparent image asset.
 - The core storefront uses the approved cream, deep-brown, yellow, and CTA-orange design system with Bricolage Grotesque display text, Inter body text, square controls, visible focus states, and photography-led layouts.
 - The homepage selects the first available uploaded menu picture for its full-width hero and falls back to a solid deep-brown field when no picture exists.
 - The homepage displays every active category as its own section with a headline, a category-linked “See our menu” CTA, and at most the first two dishes even when more are added; the full menu remains the complete catalogue. Desktop cards are deliberately larger while the approved two-column mobile layout is unchanged, and there is no oversized featured dish.
@@ -197,7 +199,7 @@ The seed delivery polygon, menu items, prices, delivery fee, hours, and content 
 
 ### 4.3 Simple food ordering
 
-- Rice and soup items require exactly one protein choice. The selected protein and its price are carried through the cart, server-side repricing, order snapshot, and kitchen ticket.
+- Rice and soup items require at least one protein choice and allow up to 25 protein portions, including multiple different choices and repeated portions of the same choice. Every selected portion and its price are carried through the cart, server-side repricing, order snapshot, and kitchen ticket.
 - The administrator food form manages section, price, minimum quantity, food name, picture,
   description, position, availability, publishing, and required protein choices.
 - Turkish item fields are hidden; the API receives the English name/description as safe fallback values for the existing bilingual schema.

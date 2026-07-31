@@ -9,6 +9,10 @@ services:
       - path: .env.example
       - path: .env
         required: false
+    environment:
+      # Compose is the local-development stack. Do not inherit a remote/production
+      # DATABASE_URL from .env when the local Supabase database is expected.
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@host.docker.internal:54322/postgres
     ports:
       - "8000:8000"
     volumes:

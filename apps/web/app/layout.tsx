@@ -6,7 +6,8 @@ import './globals.css';
 export const metadata: Metadata = {
   title: {default: 'AllensNothern', template: '%s · AllensNothern'},
   description: 'Fresh comfort food delivered locally in Istanbul.',
-  manifest: '/manifest.webmanifest'
+  manifest: '/manifest.webmanifest',
+  icons: {icon: '/icon.svg'}
 };
 export const viewport: Viewport = {themeColor: '#F7F3EA', width: 'device-width', initialScale: 1};
 

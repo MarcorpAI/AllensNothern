@@ -487,8 +487,8 @@ async def replace_modifiers(item_id: UUID, payload: list[ModifierWrite],
     if not exists:
         raise HTTPException(404, "Menu item not found")
     for modifier in payload:
-        if modifier.min_select > modifier.max_select or modifier.max_select > len(modifier.options):
-            raise HTTPException(422, "Modifier selection limits must match the number of choices")
+        if modifier.min_select > modifier.max_select:
+            raise HTTPException(422, "The minimum selection limit cannot exceed the maximum")
         if modifier.is_required and modifier.min_select < 1:
             raise HTTPException(422, "Required modifier groups must require at least one choice")
     await db.execute(text("delete from modifiers where menu_item_id=:id"), {"id": item_id})

@@ -18,6 +18,21 @@ export function DishDetailClient({item, locale}: {item: MenuItem; locale: string
   const [added, setAdded] = useState(false);
   const [favorite, setFavorite] = useState(false);
 
+  function changeOption(modifierId: string, optionId: string, change: 1 | -1, maximum: number) {
+    setSelected((current) => {
+      const choices = current[modifierId] ?? [];
+      if (change === 1 && choices.length >= maximum) return current;
+      const next = [...choices];
+      if (change === 1) next.push(optionId);
+      else {
+        const index = next.lastIndexOf(optionId);
+        if (index < 0) return current;
+        next.splice(index, 1);
+      }
+      return {...current, [modifierId]: next};
+    });
+  }
+
   function submit() {
     if (!item.is_available) return;
     const valid = item.modifiers.every((modifier) => {
@@ -42,10 +57,19 @@ export function DishDetailClient({item, locale}: {item: MenuItem; locale: string
       {added && <p className="store-added-message" role="status">{t('added')} <Link href={`/${locale}/cart`}>{t('viewCart')}</Link></p>}
       {item.minimum_order_quantity > 1 && <p className="store-added-message">{locale === 'tr' ? `Minimum sipariş: Bu üründen ${item.minimum_order_quantity} adet. Farklı atıştırmalıklar birleştirilemez.` : `Minimum order: ${item.minimum_order_quantity} of this item. Different snacks cannot be combined.`}</p>}
       {item.modifiers.map((modifier) => <fieldset className="dish-options" key={modifier.id}><legend>{modifier.name} {modifier.is_required && <span>{locale === 'tr' ? 'Zorunlu' : 'Required'}</span>}</legend>
-        {modifier.options.map((option) => <label key={option.id}><input type="radio" name={modifier.id}
-          checked={(selected[modifier.id] ?? []).includes(option.id)}
-          onChange={() => setSelected((current) => ({...current, [modifier.id]: [option.id]}))}/>
-          <span>{option.name}</span><strong>+{money(option.price_delta_kurus, locale)}</strong></label>)}
+        <p className="protein-choice-help">{locale === 'tr' ? `Birden fazla protein seçebilirsiniz (en fazla ${modifier.max_select}).` : `Choose one or more proteins, including extra portions of the same choice (up to ${modifier.max_select}).`}</p>
+        {modifier.options.map((option) => {
+          const count = (selected[modifier.id] ?? []).filter((id) => id === option.id).length;
+          const total = selected[modifier.id]?.length ?? 0;
+          return <div className={`protein-choice ${count ? 'selected' : ''}`} key={option.id}>
+            <span>{option.name}</span><strong>+{money(option.price_delta_kurus, locale)}</strong>
+            <div className="protein-choice-quantity">
+              <button type="button" disabled={count === 0} onClick={() => changeOption(modifier.id, option.id, -1, modifier.max_select)} aria-label={`${locale === 'tr' ? 'Azalt' : 'Decrease'} ${option.name}`}><Minus/></button>
+              <span aria-label={`${option.name}: ${count}`}>{count}</span>
+              <button type="button" disabled={total >= modifier.max_select} onClick={() => changeOption(modifier.id, option.id, 1, modifier.max_select)} aria-label={`${locale === 'tr' ? 'Artır' : 'Increase'} ${option.name}`}><Plus/></button>
+            </div>
+          </div>;
+        })}
       </fieldset>)}
       {selectionError && <p className="store-error" role="alert">{t('selectionNeeded')}</p>}
     </div>

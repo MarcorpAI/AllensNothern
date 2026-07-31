@@ -37,7 +37,10 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
       return;
     }
     if (!supabase) return;
-    void supabase.auth.getUser().then(({data}) => {
+    void supabase.auth.getUser().then(async ({data, error}) => {
+      if (error?.code === 'refresh_token_not_found') {
+        await supabase.auth.signOut({scope: 'local'});
+      }
       setUser(data.user);
       setLoaded(true);
     });

@@ -26,7 +26,12 @@ export default async function middleware(request: NextRequest) {
       }
     }
   );
-  await supabase.auth.getClaims();
+  const {error} = await supabase.auth.getClaims();
+  if (error?.code === 'refresh_token_not_found') {
+    request.cookies.getAll()
+      .filter(({name}) => name.startsWith('sb-') && name.includes('auth-token'))
+      .forEach(({name}) => response.cookies.set(name, '', {path: '/', maxAge: 0}));
+  }
   return response;
 }
 

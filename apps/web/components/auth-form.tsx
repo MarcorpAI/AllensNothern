@@ -70,15 +70,20 @@ export function AuthForm({mode}: {mode: Mode}) {
   }
 
   const title = t(`${mode}.title`);
-  return <section className="section"><form className="form-card" onSubmit={submit}>
-    <h1>{title}</h1>
-    {mode === 'sign-up' && <label className="field"><span>{t('username')}</span><input name="username" autoComplete="username" minLength={2} maxLength={60} required/></label>}
-    {mode !== 'update-password' && <label className="field"><span>{t('email')}</span><input name="email" type="email" autoComplete="email" required/></label>}
-    {(mode === 'sign-in' || mode === 'sign-up' || mode === 'update-password') && <label className="field"><span>{mode === 'update-password' ? t('newPassword') : t('password')}</span><input name="password" type="password" autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'} minLength={8} required/></label>}
-    {error && <p className="error" role="alert">{error}</p>}
-    {message && <p role="status">{message}</p>}
-    <button className="button" disabled={saving}>{saving ? t('working') : t(`${mode}.submit`)}</button>
-    {mode === 'sign-in' && <><p><Link href={`/${locale}/forgot-password`}>{t('forgotLink')}</Link></p><p>{t('newCustomer')} <Link href={`/${locale}/sign-up`}>{t('createLink')}</Link></p></>}
-    {mode !== 'sign-in' && mode !== 'update-password' && <p><Link href={`/${locale}/sign-in`}>{t('backToSignIn')}</Link></p>}
-  </form></section>;
+  return <section className="store-auth-page">
+    <div className="store-auth-intro"><span className="store-kicker">{t('kicker')}</span><h1>{t('welcome')}</h1><p>{t('intro')}</p></div>
+    <form className="store-auth-form" onSubmit={submit}>
+      <span className="store-kicker">{t('accountKicker')}</span><h2>{title}</h2>
+      {mode === 'sign-up' && <label className="store-field"><span>{t('username')}</span><input name="username" autoComplete="username" minLength={2} maxLength={60} required/></label>}
+      {mode !== 'update-password' && <label className="store-field"><span>{t('email')}</span><input name="email" type="email" autoComplete="email" required/></label>}
+      {(mode === 'sign-in' || mode === 'sign-up' || mode === 'update-password') && <label className="store-field"><span>{mode === 'update-password' ? t('newPassword') : t('password')}</span><input name="password" type="password" autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'} minLength={8} required/></label>}
+      {error && <p className="store-error" role="alert">{error}</p>}
+      {message && <p className="store-auth-message" role="status">{message}</p>}
+      <button className="store-button primary" disabled={saving}>{saving ? t('working') : t(`${mode}.submit`)}</button>
+      <div className="store-auth-links">
+        {mode === 'sign-in' && <><Link href={`/${locale}/forgot-password`}>{t('forgotLink')}</Link><p>{t('newCustomer')} <Link href={`/${locale}/sign-up`}>{t('createLink')}</Link></p></>}
+        {mode !== 'sign-in' && mode !== 'update-password' && <Link href={`/${locale}/sign-in`}>{t('backToSignIn')}</Link>}
+      </div>
+    </form>
+  </section>;
 }

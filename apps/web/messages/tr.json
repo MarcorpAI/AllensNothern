@@ -15,6 +15,7 @@
   "tracking": {"updated": "Sipariş durumu güncel.", "retrying": "Bağlantı kesildi. Otomatik olarak tekrar deneniyor…", "expired": "Ödeme süresi doldu", "expiredHelp": "Bu sipariş için havale yapmayın. Yeni sipariş oluşturun veya ödeme yaptıysanız destekle iletişime geçin.", "status": {"pending_payment": "Banka havalesi bekleniyor", "received": "Alındı", "preparing": "Hazırlanıyor", "out_for_delivery": "Yola çıktı", "delivered": "Teslim edildi"}},
   "footer": {"tagline": "İstanbul’da özenle hazırlanan Nijerya ev yemekleri."},
   "auth": {
+    "kicker": "Allen’s Northern Restaurant", "welcome": "Güzel yemek, sizi tanıdığında daha da güzeldir.", "intro": "Siparişlerinizi yeniden görmek, teslimat bilgilerinizi saklamak ve sofraya daha hızlı dönmek için giriş yapın.", "accountKicker": "Hesabınız",
     "email": "E-posta", "username": "Kullanıcı adı", "password": "Şifre", "newPassword": "Yeni şifre", "working": "Lütfen bekleyin…", "genericError": "Kimlik doğrulama tamamlanamadı.",
     "sign-in": {"title": "Giriş yap", "submit": "Giriş yap"},
     "sign-up": {"title": "Hesabınızı oluşturun", "submit": "Hesap oluştur"},

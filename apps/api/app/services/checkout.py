@@ -59,7 +59,7 @@ async def price_cart(db: AsyncSession, payload: CheckoutIn) -> list[PricedLine]:
         for modifier_id, group in groups.items():
             selected_ids = selected_by_group.get(modifier_id, [])
             minimum = max(int(group["min"]), 1 if group["required"] else 0)
-            if len(set(selected_ids)) != len(selected_ids) or not minimum <= len(selected_ids) <= int(group["max"]):
+            if not minimum <= len(selected_ids) <= int(group["max"]):
                 raise HTTPException(422, f"Invalid selection count for {group['name_en']}")
             options = group["options"]
             if set(selected_ids) - set(options):
