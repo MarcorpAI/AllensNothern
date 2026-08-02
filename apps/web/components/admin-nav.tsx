@@ -7,7 +7,8 @@ export function AdminNav({locale}: {locale: string}) {
   const pathname = usePathname();
   const links = [
     ['orders', 'Orders'], ['menu', 'Food & prices'], ['zones', 'Delivery areas'],
-    ['hours', 'Opening times'], ['capacity', 'Order limits'], ['payments', 'Payments'], ['analytics', 'Sales']
+    ['hours', 'Opening times'], ['capacity', 'Order limits'], ['payments', 'Payments'],
+    ['notifications', 'Email alerts'], ['analytics', 'Sales']
   ];
   return <nav className="admin-nav" aria-label="Dashboard sections">{links.map(([path, label]) => {
     const href = `/${locale}/admin/${path}`;

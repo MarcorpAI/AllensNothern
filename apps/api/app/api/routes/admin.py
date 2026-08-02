@@ -5,7 +5,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from pydantic import BaseModel, Field, TypeAdapter, model_validator
+from pydantic import BaseModel, EmailStr, Field, TypeAdapter, model_validator
 from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +31,7 @@ from app.services.menu_management import (
     replace_item_image,
     update_complete_item,
 )
+from app.services.notifications import admin_notification_email
 
 router = APIRouter(tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -45,6 +46,27 @@ class CategoryWrite(BaseModel):
     name_tr: str = Field(min_length=1, max_length=100)
     sort_order: int = 0
     is_active: bool = True
+
+
+class NotificationSettingsWrite(BaseModel):
+    admin_email: EmailStr
+
+
+@router.get("/notification-settings")
+async def notification_settings(db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings)) -> dict[str, object]:
+    stored = (await db.execute(text("select admin_notification_email from restaurant_settings where id"))).scalar_one()
+    return {"admin_email": str(stored or settings.admin_email), "uses_environment_fallback": not bool(stored)}
+
+
+@router.put("/notification-settings")
+async def update_notification_settings(payload: NotificationSettingsWrite,
+    db: AsyncSession = Depends(get_db)) -> dict[str, object]:
+    email = str(payload.admin_email).strip().lower()
+    await db.execute(text("""update restaurant_settings set admin_notification_email=:email,
+        updated_at=now() where id"""), {"email": email})
+    await db.commit()
+    return {"admin_email": email, "uses_environment_fallback": False}
 
 
 class PolygonWrite(BaseModel):
@@ -241,7 +263,8 @@ async def payment_orders(db: AsyncSession = Depends(get_db)) -> list[dict[str, o
 
 @router.post("/orders/{order_id}/confirm-bank-transfer", response_model=OrderOut)
 async def confirm_bank_transfer(order_id: UUID, payload: BankTransferConfirmationIn,
-    principal: Principal = Depends(require_admin), db: AsyncSession = Depends(get_db)) -> OrderOut:
+    principal: Principal = Depends(require_admin), db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings)) -> OrderOut:
     await expire_bank_transfer_orders(db)
     current = (await db.execute(text("""select id,order_number,status::text status,
         payment_status::text payment_status,payment_method,customer_name,total_kurus,address_text,
@@ -279,9 +302,15 @@ async def confirm_bank_transfer(order_id: UUID, payload: BankTransferConfirmatio
     await db.execute(text("""insert into order_status_history(order_id,status,changed_by)
         values (:id,'received',:actor)"""), {"id": order_id, "actor": principal.user_id})
     await db.execute(text("""insert into notification_outbox(order_id,kind,recipient,payload)
-        select id,'order_confirmation',customer_email,jsonb_build_object(
-        'order_number',order_number,'status','received') from orders where id=:id
-        on conflict do nothing"""), {"id": order_id})
+        select id,'order_confirmation',customer_email,jsonb_build_object('status','received')
+        from orders where id=:id on conflict(order_id,kind) do update set
+        recipient=excluded.recipient,payload=notification_outbox.payload || excluded.payload,
+        available_at=now(),attempts=0,last_error=null"""), {"id": order_id})
+    admin_recipient = await admin_notification_email(db, settings.admin_email)
+    if admin_recipient:
+        await db.execute(text("""insert into notification_outbox(order_id,kind,recipient,payload)
+            values (:id,'admin_order_received',:recipient,'{}') on conflict do nothing"""),
+            {"id": order_id, "recipient": admin_recipient})
     await db.execute(text("""insert into audit_log(actor_id,action,entity_type,entity_id,before_data,after_data)
         values (:actor,'bank_transfer_confirmed','order',:id,
         jsonb_build_object('payment_status','pending'),jsonb_build_object('payment_status','paid'))"""),
@@ -330,7 +359,9 @@ async def update_status(order_id: UUID, payload: StatusUpdateIn,
     await db.execute(text("insert into order_status_history(order_id,status,changed_by) values (:id,:status,:actor)"),
                      {"id": order_id, "status": payload.status, "actor": principal.user_id})
     await db.execute(text("""insert into notification_outbox(order_id,kind,recipient,payload)
-        select id,'status_' || :status,customer_email,jsonb_build_object('order_number',order_number,'status',:status)
+        select id,'status_' || :status,customer_email,jsonb_build_object('status',:status) || coalesce(
+        (select payload - 'status' from notification_outbox where order_id=orders.id
+        and kind='order_confirmation'),'{}'::jsonb)
         from orders where id=:id on conflict do nothing"""), {"id": order_id, "status": payload.status})
     await db.execute(text("""insert into audit_log(actor_id,action,entity_type,entity_id,before_data,after_data)
         values (:actor,'status_update','order',:id,jsonb_build_object('status',cast(:before as text)),

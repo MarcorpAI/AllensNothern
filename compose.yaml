@@ -34,6 +34,8 @@ services:
       - path: .env.example
       - path: .env
         required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@host.docker.internal:54322/postgres
     volumes:
       - ./apps/api:/app
     extra_hosts:

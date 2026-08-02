@@ -140,6 +140,13 @@ async def checkout(payload: CheckoutIn,
             "name_tr": line.item_name_tr, "quantity": line.quantity, "unit_price": line.unit_price_kurus,
             "modifiers": json.dumps(line.modifiers), "total": line.total,
         })
+    # Retain the guest bearer token only in the locked notification job. The job remains
+    # unavailable until payment is confirmed, then supplies the secure tracking link.
+    await db.execute(text("""insert into notification_outbox(order_id,kind,recipient,payload,available_at)
+        values (:order_id,'order_confirmation',:recipient,
+        jsonb_build_object('tracking_token',cast(:tracking_token as text),'status','received'),'infinity')"""), {
+        "order_id": order["id"], "recipient": str(payload.customer.email), "tracking_token": raw_token,
+    })
     await db.execute(text("""insert into payments (order_id,provider,provider_reference,amount_kurus,status,
         raw_response,settlement_currency,settlement_amount_minor,exchange_rate)
         values (:order_id,'bank_transfer',:reference,:amount,'pending',:raw,:currency,:settlement_amount,:rate)"""),

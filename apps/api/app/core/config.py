@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     bank_transfer_verification_minutes: int = Field(default=30, ge=5, le=120)
     resend_api_key: str = ""
     email_from: str = "orders@example.com"
+    admin_email: str = ""
+    support_email: str = "support@example.com"
     nominatim_url: str = "https://nominatim.openstreetmap.org"
     map_contact_email: str = "maps@example.com"
     capacity_reservation_minutes: int = Field(default=30, ge=5, le=120)

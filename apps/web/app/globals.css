@@ -180,6 +180,7 @@ body{background:var(--store-cream);color:var(--store-brown);font-family:Inter,Ar
 .admin-choice-group{display:flex;gap:24px;flex-wrap:wrap;margin:0 0 24px;padding:0;border:0}
 .admin-choice-group legend{width:100%;margin-bottom:10px;font-family:var(--font-display),sans-serif;font-size:1rem;font-weight:800}
 .admin-choice-group label{display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px solid var(--store-tan);background:#fffdf8;font-size:.78rem;font-weight:600}
+.admin-notification-settings{max-width:680px}.admin-notification-settings>p{max-width:560px;color:var(--store-muted);font-size:.8rem;line-height:1.6}.admin-notification-settings>.field{margin-top:24px}.admin-notification-settings>small{display:block;margin:-4px 0 12px;color:var(--store-muted)}
 .capacity-times{max-width:600px}.capacity-number{max-width:300px;margin-top:8px}
 .capacity-preview{display:grid;gap:5px;margin:22px 0;padding:18px;border-left:6px solid var(--store-yellow);background:var(--store-brown);color:var(--store-cream)}
 .capacity-preview span{color:#d9cdbc;font-size:.72rem}.capacity-preview strong{font-family:var(--font-display),sans-serif;font-size:1.05rem}

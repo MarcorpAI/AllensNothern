@@ -22,6 +22,7 @@ from app.schemas import (
     TransferSentOut,
 )
 from app.services.bank_transfer import expire_bank_transfer_orders
+from app.services.notifications import admin_notification_email
 
 router = APIRouter(tags=["orders"])
 
@@ -106,6 +107,11 @@ async def transfer_sent(token: str, payload: TransferSentIn, db: AsyncSession = 
             raise HTTPException(410, "The payment window has expired")
     else:
         updated = row
+    admin_recipient = await admin_notification_email(db, settings.admin_email)
+    if admin_recipient:
+        await db.execute(text("""insert into notification_outbox(order_id,kind,recipient,payload)
+            values (:id,'admin_transfer_reported',:recipient,'{}') on conflict do nothing"""),
+            {"id": row["id"], "recipient": admin_recipient})
     await db.commit()
     return {"transfer_notified_at": updated["transfer_notified_at"],
             "payment_expires_at": updated["payment_expires_at"]}

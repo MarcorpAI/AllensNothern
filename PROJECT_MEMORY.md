@@ -518,18 +518,21 @@ checkout route.
 
 The live operational limitation is manual reconciliation: the owner must check the receiving bank application and confirm the exact amount in the administrator dashboard. Customer acknowledgement and screenshots are never treated as payment. The dormant Iyzico adapter is future-only and is not the selected checkout path.
 
-### 7.2 Real email is not configured
+### 7.2 Branded Resend delivery is implemented; credentials are not configured
 
-`RESEND_API_KEY` is missing. The development worker currently marks an outbox item as sent even when no Resend key is present, but no real email is delivered. This is acceptable only as a local simulation and must be changed before staging/production.
+The notification worker now renders responsive website-matched cream, deep-brown, yellow, and orange
+HTML emails with plain-text fallbacks. Customer paid confirmations and status updates include frozen
+item/protein quantities, totals, delivery context, and the guest tracking link in English or Turkish.
+Administrator alerts cover customer transfer reports and newly confirmed paid orders with full kitchen,
+customer, and delivery details. Resend sends use the outbox UUID as an idempotency key and retry with
+backoff; missing credentials leave messages queued rather than falsely marking them delivered.
+The operational alert recipient is editable under **Admin → Email alerts** and is stored in
+`restaurant_settings.admin_notification_email`; `ADMIN_EMAIL` remains the fallback until a dashboard
+address is saved, and changing it does not require a service restart.
 
-The current email is also incomplete:
-
-- It is a minimal generic HTML message.
-- It is not localized.
-- Confirmation emails do not contain the guest tracking token/link.
-- Status emails do not contain useful delivery context.
-- Sender-domain verification has not been completed.
-- There is no operator view for permanently failed notification jobs.
+Real delivery remains blocked until `RESEND_API_KEY`, a verified-domain `EMAIL_FROM`, `ADMIN_EMAIL`, and
+`SUPPORT_EMAIL` are configured. Sender-domain SPF/DKIM verification has not been completed in this
+workspace. There is still no operator view for permanently failed notification jobs.
 
 ### 7.3 Hosted Supabase Auth still needs environment acceptance
 
@@ -812,11 +815,11 @@ Definition of done: a real sandbox payment produces exactly one paid kitchen ord
 
 #### 1.3 Complete email delivery
 
-- Configure Resend and verify the sending domain.
-- Make missing credentials an explicit development log state; do not mark a message delivered when no provider call occurred outside an intentional test mode.
-- Build localized confirmation and status templates.
-- Include a secure tracking URL in guest confirmation email. This requires making the raw tracking token available to the notification payload safely at order creation/payment confirmation time.
-- Include order summary, total, address, support details, and status context.
+- Configure Resend credentials and verify the sending domain; implementation is complete but this external gate remains.
+- Missing credentials are an explicit worker warning and leave jobs queued.
+- Localized confirmation/status and administrator templates are implemented.
+- Guest tracking tokens are held only in unavailable outbox payloads until payment is confirmed and are then included in customer tracking links.
+- Emails include order summary, repeated protein counts, totals, address, support details, and status context.
 - Add delivery/failure observability and a retry/dead-letter admin view.
 
 Definition of done: real emails arrive for paid order and every configured status transition in both locales.
